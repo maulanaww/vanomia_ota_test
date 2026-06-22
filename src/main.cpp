@@ -22,7 +22,7 @@ const char* MQTT_PASSWORD  = "hYqS9+*zDTxYN3bQSTPzistq";
 const char* MQTT_CLIENT_ID = "ESP32_OTA_Test";
 const char* MQTT_OTA_TOPIC = "ota/test/device";
 
-#define FIRMWARE_VERSION "v1.0.0"
+#define FIRMWARE_VERSION "v1.0.1"
 #define BUILD_DATE "2026-06-22"
 
 // ══════════════════════════════════════════════════════════════

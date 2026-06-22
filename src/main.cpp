@@ -213,8 +213,17 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 // ══════════════════════════════════════════════════════════════
 // LED CONTROL
 // ══════════════════════════════════════════════════════════════
-void allLedsOff() {
-  for (int i = 0; i < 8; i++) ledcWrite(ledPins[i], 0);
+void runLedTest() {
+  if (!ledTestRunning) return;
+  unsigned long now = millis();
+  if (now - lastLedTestStep < 300) return;
+  lastLedTestStep = now;
+
+  if (currentLedTest >= 0) ledcWrite(currentLedTest, 0);
+  currentLedTest++;
+  if (currentLedTest >= 8) currentLedTest = 0;
+  ledcWrite(currentLedTest, 255);
+  Serial.printf("[LED TEST] LED %d ON\n", currentLedTest + 1);
 }
 
 void runLedTest() {
@@ -350,8 +359,9 @@ void setup() {
   pinMode(BTN_OK,   INPUT_PULLUP);
 
   for (int i = 0; i < 8; i++) {
-    ledcAttach(ledPins[i], 5000, 8);
-    ledcWrite(ledPins[i], 0);
+    ledcSetup(i, 5000, 8);
+    ledcAttachPin(ledPins[i], i);
+    ledcWrite(i, 0);
   }
 
   if (!display.begin(SSD1306_SWITCHCAPVCC)) {

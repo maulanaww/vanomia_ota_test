@@ -1,0 +1,39 @@
+name: Build Firmware
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup PlatformIO
+      uses: platformio/platformio-core-installer@v2
+    
+    - name: Build
+      run: pio run
+    
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v${{ github.run_number }}
+        release_name: Firmware v${{ github.run_number }}
+        draft: false
+        prerelease: false
+    
+    - name: Upload firmware
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: .pio/build/testing_device/firmware.bin
+        asset_name: testing_device_firmware.bin
+        asset_content_type: application/octet-stream

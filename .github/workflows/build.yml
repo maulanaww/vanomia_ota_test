@@ -9,13 +9,24 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v3
+    - name: Checkout code
+      uses: actions/checkout@v4
     
-    - name: Setup PlatformIO
-      uses: platformio/platformio-core-installer@v2
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
     
-    - name: Build
+    - name: Install PlatformIO
+      run: |
+        python -m pip install --upgrade pip
+        pip install platformio
+    
+    - name: Build firmware
       run: pio run
+    
+    - name: Check firmware size
+      run: ls -lh .pio/build/testing_device/firmware.bin
     
     - name: Create Release
       id: create_release
@@ -28,7 +39,7 @@ jobs:
         draft: false
         prerelease: false
     
-    - name: Upload firmware
+    - name: Upload firmware to Release
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

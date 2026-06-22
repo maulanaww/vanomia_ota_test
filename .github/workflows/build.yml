@@ -4,6 +4,12 @@ on:
   push:
     branches: [ main ]
 
+# ══════════════════════════════════════════════════════════════
+# PERMISSIONS — WAJIB ADA untuk create release
+# ══════════════════════════════════════════════════════════════
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -28,23 +34,26 @@ jobs:
     - name: Check firmware size
       run: ls -lh .pio/build/testing_device/firmware.bin
     
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    # ══════════════════════════════════════════════════════════
+    # GANTI ke softprops/action-gh-release (lebih modern & reliable)
+    # ══════════════════════════════════════════════════════════
+    - name: Create Release & Upload Firmware
+      uses: softprops/action-gh-release@v2
       with:
         tag_name: v${{ github.run_number }}
-        release_name: Firmware v${{ github.run_number }}
-        draft: false
-        prerelease: false
-    
-    - name: Upload firmware to Release
-      uses: actions/upload-release-asset@v1
+        name: Firmware v${{ github.run_number }}
+        body: |
+          ## Firmware Build #${{ github.run_number }}
+          
+          **Commit:** ${{ github.sha }}
+          **Branch:** ${{ github.ref_name }}
+          **Built at:** ${{ github.event.head_commit.timestamp }}
+          
+          ### Flash via OTA
+          1. Copy URL firmware di bawah
+          2. Kirim via MQTT ke topik: `ota/test/device`
+          3. ESP32 akan download & update sendiri
+        files: .pio/build/testing_device/firmware.bin
+        generate_release_notes: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: .pio/build/testing_device/firmware.bin
-        asset_name: testing_device_firmware.bin
-        asset_content_type: application/octet-stream

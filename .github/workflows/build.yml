@@ -1,12 +1,9 @@
-name: Build Firmware
+name: Build & OTA Trigger
 
 on:
   push:
     branches: [ main ]
 
-# ══════════════════════════════════════════════════════════════
-# PERMISSIONS — WAJIB ADA untuk create release
-# ══════════════════════════════════════════════════════════════
 permissions:
   contents: write
 
@@ -34,11 +31,9 @@ jobs:
     - name: Check firmware size
       run: ls -lh .pio/build/testing_device/firmware.bin
     
-    # ══════════════════════════════════════════════════════════
-    # GANTI ke softprops/action-gh-release (lebih modern & reliable)
-    # ══════════════════════════════════════════════════════════
     - name: Create Release & Upload Firmware
       uses: softprops/action-gh-release@v2
+      id: release
       with:
         tag_name: v${{ github.run_number }}
         name: Firmware v${{ github.run_number }}
@@ -47,13 +42,64 @@ jobs:
           
           **Commit:** ${{ github.sha }}
           **Branch:** ${{ github.ref_name }}
-          **Built at:** ${{ github.event.head_commit.timestamp }}
           
-          ### Flash via OTA
-          1. Copy URL firmware di bawah
-          2. Kirim via MQTT ke topik: `ota/test/device`
-          3. ESP32 akan download & update sendiri
+          ### OTA Trigger
+          Firmware URL: https://github.com/${{ github.repository }}/releases/download/v${{ github.run_number }}/firmware.bin
         files: .pio/build/testing_device/firmware.bin
-        generate_release_notes: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    # ══════════════════════════════════════════════════════════
+    # STEP BARU: Kirim MQTT Trigger Otomatis!
+    # ══════════════════════════════════════════════════════════
+    - name: Install MQTT Client
+      run: pip install paho-mqtt
+    
+    - name: Send MQTT OTA Trigger
+      env:
+        MQTT_BROKER: mqtt.permataindonesia.com
+        MQTT_PORT: 1838
+        MQTT_USER: superAdmNyamuk1
+        MQTT_PASS: hYqS9+*zDTxYN3bQSTPzistq
+        MQTT_TOPIC: ota/test/device
+        FIRMWARE_URL: https://github.com/${{ github.repository }}/releases/download/v${{ github.run_number }}/firmware.bin
+      run: |
+        echo "📤 Sending MQTT OTA trigger..."
+        echo "   Broker: $MQTT_BROKER:$MQTT_PORT"
+        echo "   Topic: $MQTT_TOPIC"
+        echo "   Payload: $FIRMWARE_URL"
+        
+        python3 -c "
+        import paho.mqtt.client as mqtt
+        import time
+        
+        broker = '$MQTT_BROKER'
+        port = $MQTT_PORT
+        username = '$MQTT_USER'
+        password = '$MQTT_PASS'
+        topic = '$MQTT_TOPIC'
+        payload = '$FIRMWARE_URL'
+        
+        print(f'Connecting to {broker}:{port}...')
+        
+        client = mqtt.Client()
+        client.username_pw_set(username, password)
+        
+        # Connect
+        client.connect(broker, port, 60)
+        time.sleep(1)  # Tunggu koneksi stabil
+        
+        # Publish
+        print(f'Publishing to {topic}...')
+        result = client.publish(topic, payload, qos=1)
+        result.wait_for_publish()
+        
+        print(f'✅ MQTT trigger sent!')
+        print(f'   Topic: {topic}')
+        print(f'   Payload: {payload}')
+        
+        # Disconnect
+        time.sleep(1)
+        client.disconnect()
+        print('✅ Done!')
+        "

@@ -1,5 +1,6 @@
 // TESTING DEVICE — OLED + 8 LED + 4 Button + OTA Ready
 // Semua kode dalam 1 file, tidak butuh file lain
+// FIXED: Pakai LEDC API lama untuk kompatibilitas ESP32 Core v2.x
 
 #include <WiFi.h>
 #include <PubSubClient.h>
@@ -9,7 +10,7 @@
 #include <Adafruit_SSD1306.h>
 
 // ══════════════════════════════════════════════════════════════
-// KONFIGURASI — GANTI SESUAI KEBUTUHAN
+// KONFIGURASI
 // ══════════════════════════════════════════════════════════════
 
 // WiFi
@@ -20,7 +21,7 @@ const char* WIFI_PASSWORD = "ITDevInfra24";
 const char* MQTT_SERVER    = "mqtt.permataindonesia.com";
 const int   MQTT_PORT      = 1838;
 const char* MQTT_USERNAME  = "superAdmNyamuk1";
-const char* MQTT_PASSWORD  = "hYqS9+*zDTxYN3bQSTPzistq";  // ← Password BENAR
+const char* MQTT_PASSWORD  = "hYqS9+*zDTxYN3bQSTPzistq";
 const char* MQTT_CLIENT_ID = "ESP32_OTA_Test";
 const char* MQTT_OTA_TOPIC = "ota/test/device";
 
@@ -87,7 +88,8 @@ void allLedsOff();
 // ══════════════════════════════════════════════════════════════
 
 void setupWiFi() {
-  Serial.print("[WiFi] Connecting to " + String(WIFI_SSID));
+  Serial.print("[WiFi] Connecting to ");
+  Serial.println(WIFI_SSID);
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   
@@ -126,7 +128,8 @@ void reconnectMQTT() {
   if (ok) {
     Serial.println(" connected!");
     mqttClient.subscribe(MQTT_OTA_TOPIC);
-    Serial.println("[MQTT] Subscribed OTA topic: " + String(MQTT_OTA_TOPIC));
+    Serial.print("[MQTT] Subscribed OTA topic: ");
+    Serial.println(MQTT_OTA_TOPIC);
   } else {
     Serial.printf(" failed (rc=%d), retry in 5s\n", mqttClient.state());
     delay(5000);
@@ -208,12 +211,12 @@ void handleOTAUpdate(String firmwareURL) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// LED CONTROL
+// LED CONTROL — FIXED: pakai channel, bukan pin
 // ══════════════════════════════════════════════════════════════
 
 void allLedsOff() {
   for (int i = 0; i < 8; i++) {
-    ledcWrite(ledPins[i], 0);
+    ledcWrite(i, 0);  // ← FIXED: pakai channel index, bukan pin
   }
 }
 
@@ -226,7 +229,7 @@ void runLedTest() {
   lastLedTestStep = now;
   
   if (currentLedTest >= 0) {
-    ledcWrite(ledPins[currentLedTest], 0);
+    ledcWrite(currentLedTest, 0);  // ← FIXED
   }
   
   currentLedTest++;
@@ -234,7 +237,7 @@ void runLedTest() {
     currentLedTest = 0;
   }
   
-  ledcWrite(ledPins[currentLedTest], 255);
+  ledcWrite(currentLedTest, 255);  // ← FIXED
   
   Serial.printf("[LED TEST] LED %d ON\n", currentLedTest + 1);
 }
@@ -337,6 +340,9 @@ void handleButtons() {
   
   if (digitalRead(BTN_UP) == LOW) {
     lastButtonPress = now;
+    if (currentPage == MENU_INFO || currentPage == MENU_LED_TEST) {
+      if (cursorPosition > 0) cursorPosition--;
+    }
     Serial.println("[BTN] UP");
   }
   else if (digitalRead(BTN_DOWN) == LOW) {
@@ -354,6 +360,7 @@ void handleButtons() {
       if (ledTestRunning) {
         ledTestRunning = false;
         allLedsOff();
+        Serial.println("[LED TEST] Stopped");
       }
     }
     Serial.println("[BTN] BACK");
@@ -364,8 +371,10 @@ void handleButtons() {
     if (currentPage == HOME) {
       if (cursorPosition == 0) {
         currentPage = MENU_INFO;
+        Serial.println("[MENU] Info");
       } else if (cursorPosition == 1) {
         currentPage = MENU_LED_TEST;
+        Serial.println("[MENU] LED Test");
       }
     }
     else if (currentPage == MENU_LED_TEST) {
@@ -373,8 +382,10 @@ void handleButtons() {
       if (ledTestRunning) {
         currentLedTest = -1;
         lastLedTestStep = 0;
+        Serial.println("[LED TEST] Started");
       } else {
         allLedsOff();
+        Serial.println("[LED TEST] Stopped");
       }
     }
   }
@@ -389,8 +400,10 @@ void setup() {
   
   Serial.println("\n================================");
   Serial.println("Device: OTA Testing");
-  Serial.println("Version: " FIRMWARE_VERSION);
-  Serial.println("Build: " BUILD_DATE);
+  Serial.print("Version: ");
+  Serial.println(FIRMWARE_VERSION);
+  Serial.print("Build: ");
+  Serial.println(BUILD_DATE);
   Serial.println("================================\n");
   
   pinMode(BTN_UP, INPUT_PULLUP);
@@ -398,9 +411,13 @@ void setup() {
   pinMode(BTN_BACK, INPUT_PULLUP);
   pinMode(BTN_OK, INPUT_PULLUP);
   
+  // ══════════════════════════════════════════════════════════
+  // FIXED: Setup LEDs pakai API lama (kompatibel ESP32 Core v2.x)
+  // ══════════════════════════════════════════════════════════
   for (int i = 0; i < 8; i++) {
-    ledcAttach(ledPins[i], 5000, 8);
-    ledcWrite(ledPins[i], 0);
+    ledcSetup(i, 5000, 8);           // Setup channel i, freq 5kHz, 8-bit
+    ledcAttachPin(ledPins[i], i);    // Attach pin ke channel i
+    ledcWrite(i, 0);                 // Tulis duty cycle ke channel i
   }
   
   if (!display.begin(SSD1306_SWITCHCAPVCC)) {
@@ -426,13 +443,16 @@ void setup() {
   
   Serial.println("[BOOT] LED animation...");
   for (int i = 0; i < 8; i++) {
-    ledcWrite(ledPins[i], 255);
+    ledcWrite(i, 255);  // ← FIXED
     delay(100);
-    ledcWrite(ledPins[i], 0);
+    ledcWrite(i, 0);    // ← FIXED
   }
   
   Serial.println("\n════════════════════════════════════════════");
   Serial.println("  Testing Device Ready!");
+  Serial.println("  OLED: 128x64");
+  Serial.println("  LEDs: 8");
+  Serial.println("  Buttons: 4 (UP/DOWN/BACK/OK)");
   Serial.print("  OTA Topic: ");
   Serial.println(MQTT_OTA_TOPIC);
   Serial.println("════════════════════════════════════════════\n");

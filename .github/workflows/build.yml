@@ -61,7 +61,7 @@ jobs:
         MQTT_PORT: 1838
         MQTT_USER: superAdmNyamuk1
         MQTT_PASS: hYqS9+*zDTxYN3bQSTPzistq
-        MQTT_TOPIC: ota/test/device
+        MQTT_TOPIC: ota/block01/testing
         FIRMWARE_URL: https://github.com/${{ github.repository }}/releases/download/v${{ github.run_number }}/firmware.bin
       run: |
         echo "📤 Sending MQTT OTA trigger..."
